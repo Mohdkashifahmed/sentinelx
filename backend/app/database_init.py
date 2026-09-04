@@ -5,9 +5,7 @@ from app.models import User, Scan, ScanFinding, ScanTimeline, Report, AIAnalysis
 from app.models.user import UserRole
 from app.models.scan import ScanType, ScanStatus, Verdict, Severity
 from app.models.analyst import CaseStatus
-from passlib.context import CryptContext
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import bcrypt
 
 
 def init_db():
@@ -63,9 +61,9 @@ def seed_demo_data():
 
         # --- Users ---
         users = [
-            User(email="user@demo.com", name="Alex Morgan", hashed_password=pwd_context.hash("demo123"), role=UserRole.user, created_at=datetime(2026, 1, 15), last_login=datetime(2026, 9, 3, 7, 0)),
-            User(email="analyst@demo.com", name="Sarah Chen", hashed_password=pwd_context.hash("demo123"), role=UserRole.analyst, created_at=datetime(2025, 11, 20), last_login=datetime(2026, 9, 2, 8, 30)),
-            User(email="admin@demo.com", name="Marcus Webb", hashed_password=pwd_context.hash("demo123"), role=UserRole.admin, created_at=datetime(2025, 9, 1), last_login=datetime(2026, 9, 3, 6, 45)),
+            User(email="user@demo.com", name="Alex Morgan", hashed_password=bcrypt.hashpw(b"demo123", bcrypt.gensalt()).decode(), role=UserRole.user, created_at=datetime(2026, 1, 15), last_login=datetime(2026, 9, 3, 7, 0)),
+            User(email="analyst@demo.com", name="Sarah Chen", hashed_password=bcrypt.hashpw(b"demo123", bcrypt.gensalt()).decode(), role=UserRole.analyst, created_at=datetime(2025, 11, 20), last_login=datetime(2026, 9, 2, 8, 30)),
+            User(email="admin@demo.com", name="Marcus Webb", hashed_password=bcrypt.hashpw(b"demo123", bcrypt.gensalt()).decode(), role=UserRole.admin, created_at=datetime(2025, 9, 1), last_login=datetime(2026, 9, 3, 6, 45)),
         ]
         db.add_all(users)
         db.flush()  # get IDs without committing

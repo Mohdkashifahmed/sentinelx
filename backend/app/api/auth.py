@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
-from passlib.context import CryptContext
+import bcrypt
 from jose import jwt, JWTError
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.database import get_db
@@ -12,7 +12,6 @@ from app.config import settings
 from app.models.user import User, UserRole
 
 router = APIRouter()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
 
@@ -76,7 +75,7 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     user = User(
         name=request.name,
         email=request.email,
-        hashed_password=pwd_context.hash(request.password),
+        hashed_password=bcrypt.hashpw(request.password.encode(), bcrypt.gensalt()).decode(),
         role=UserRole.user,
     )
     db.add(user)
@@ -93,7 +92,7 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == request.email).first()
-    if not user or not pwd_context.verify(request.password, user.hashed_password):
+    if not user or not bcrypt.checkpw(request.password.encode(), user.hashed_password.encode()):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     user.last_login = datetime.utcnow()
