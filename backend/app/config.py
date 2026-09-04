@@ -1,9 +1,10 @@
 """Application configuration."""
+import os
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql://user:password@localhost:5432/sentinelx"
+    DATABASE_URL: str = "sqlite:///./sentinelx.db"
     JWT_SECRET: str = "change-this-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_MINUTES: int = 60

@@ -50,7 +50,7 @@ def seed_demo_data():
         db.add_all(cases)
         db.commit()
 
-        print("✓ Database initialized and demo data seeded.")
+        print("[OK] Database initialized and demo data seeded.")
     finally:
         db.close()
 
