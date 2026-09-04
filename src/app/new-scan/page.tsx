@@ -8,6 +8,13 @@ import { Globe, Upload, FileCode, ArrowRight, Shield, AlertTriangle, Lock, Check
 
 type ScanOption = 'website' | 'file' | 'source-code' | null;
 
+const API_BASE = 'https://sentinelx-backend.onrender.com';
+
+function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('sentinelx_token');
+}
+
 export default function NewScanPage() {
   const router = useRouter();
   const [selected, setSelected] = useState<ScanOption>(null);
@@ -22,8 +29,26 @@ export default function NewScanPage() {
     try { new URL(url); } catch { setError('Please enter a valid URL including https://'); return; }
     setError('');
     setScanning(true);
-    await new Promise((r) => setTimeout(r, 2000));
-    router.push('/scans/1');
+
+    try {
+      const token = getToken();
+      const res = await fetch(`${API_BASE}/api/scans/website`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ url }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || 'Scan failed');
+      }
+
+      const data = await res.json();
+      router.push(`/scans/${data.scan_id}`);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Scan failed. Please try again.');
+      setScanning(false);
+    }
   };
 
   const handleFileScan = async () => {
@@ -31,8 +56,29 @@ export default function NewScanPage() {
     if (file.size > 100 * 1024 * 1024) { setError('File size must be under 100MB'); return; }
     setError('');
     setScanning(true);
-    await new Promise((r) => setTimeout(r, 2000));
-    router.push('/scans/3');
+
+    try {
+      const token = getToken();
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch(`${API_BASE}/api/scans/file`, {
+        method: 'POST',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || 'Scan failed');
+      }
+
+      const data = await res.json();
+      router.push(`/scans/${data.scan_id}`);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Scan failed. Please try again.');
+      setScanning(false);
+    }
   };
 
   const handleSourceScan = async () => {
@@ -40,8 +86,29 @@ export default function NewScanPage() {
     if (!sourceFile.name.endsWith('.zip')) { setError('Please upload a .zip file'); return; }
     setError('');
     setScanning(true);
-    await new Promise((r) => setTimeout(r, 2000));
-    router.push('/scans/4');
+
+    try {
+      const token = getToken();
+      const formData = new FormData();
+      formData.append('file', sourceFile);
+
+      const res = await fetch(`${API_BASE}/api/scans/source-code`, {
+        method: 'POST',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || 'Scan failed');
+      }
+
+      const data = await res.json();
+      router.push(`/scans/${data.scan_id}`);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Scan failed. Please try again.');
+      setScanning(false);
+    }
   };
 
   return (
@@ -89,7 +156,7 @@ export default function NewScanPage() {
         {selected === 'website' && (
           <div className="space-y-4 animate-fade-in">
             <button onClick={() => { setSelected(null); setError(''); }} className="text-[13px] text-[#6b7280] hover:text-[#111827] dark:hover:text-white">
-              ← Back to scan types
+              &larr; Back to scan types
             </button>
             <div className="p-6 rounded-xl border border-[#e5e7eb] dark:border-white/10 bg-white dark:bg-[#0a0a0a]">
               <h3 className="text-[16px] font-semibold text-[#111827] dark:text-white mb-1">Website URL</h3>
@@ -118,7 +185,7 @@ export default function NewScanPage() {
                 </div>
               </div>
               <button onClick={handleWebsiteScan} disabled={scanning || !url.trim()} className="mt-4 w-full py-3 bg-[#111827] dark:bg-white text-white dark:text-[#0a0a0a] text-[14px] font-medium rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2">
-                {scanning ? <><Loader2 className="w-4 h-4 animate-spin" /> Starting Scan...</> : <><Shield className="w-4 h-4" /> Start Website Scan</>}
+                {scanning ? <><Loader2 className="w-4 h-4 animate-spin" /> Scanning...</> : <><Shield className="w-4 h-4" /> Start Website Scan</>}
               </button>
             </div>
           </div>
@@ -128,7 +195,7 @@ export default function NewScanPage() {
         {selected === 'file' && (
           <div className="space-y-4 animate-fade-in">
             <button onClick={() => { setSelected(null); setError(''); setFile(null); }} className="text-[13px] text-[#6b7280] hover:text-[#111827] dark:hover:text-white">
-              ← Back to scan types
+              &larr; Back to scan types
             </button>
             <div className="p-6 rounded-xl border border-[#e5e7eb] dark:border-white/10 bg-white dark:bg-[#0a0a0a]">
               <h3 className="text-[16px] font-semibold text-[#111827] dark:text-white mb-1">Upload Application File</h3>
@@ -166,7 +233,7 @@ export default function NewScanPage() {
         {selected === 'source-code' && (
           <div className="space-y-4 animate-fade-in">
             <button onClick={() => { setSelected(null); setError(''); setSourceFile(null); }} className="text-[13px] text-[#6b7280] hover:text-[#111827] dark:hover:text-white">
-              ← Back to scan types
+              &larr; Back to scan types
             </button>
             <div className="p-6 rounded-xl border border-[#e5e7eb] dark:border-white/10 bg-white dark:bg-[#0a0a0a]">
               <h3 className="text-[16px] font-semibold text-[#111827] dark:text-white mb-1">Upload Source Code Project</h3>
