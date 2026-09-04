@@ -1,7 +1,8 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { User, UserRole } from '@/data/types';
+import { authApi, setToken, clearToken } from '@/lib/api';
 
 interface AuthContextType {
   user: User | null;
@@ -15,51 +16,77 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const DEMO_USERS: Record<string, { password: string; user: User }> = {
-  'user@demo.com': {
-    password: 'demo123',
-    user: { id: '1', email: 'user@demo.com', name: 'Alex Morgan', role: 'user', createdAt: new Date('2026-01-15'), lastLogin: new Date('2026-09-03T07:00:00') },
-  },
-  'analyst@demo.com': {
-    password: 'demo123',
-    user: { id: '2', email: 'analyst@demo.com', name: 'Sarah Chen', role: 'analyst', createdAt: new Date('2025-11-20'), lastLogin: new Date('2026-09-02T08:30:00') },
-  },
-  'admin@demo.com': {
-    password: 'demo123',
-    user: { id: '3', email: 'admin@demo.com', name: 'Marcus Webb', role: 'admin', createdAt: new Date('2025-09-01'), lastLogin: new Date('2026-09-03T06:45:00') },
-  },
-};
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const login = useCallback(async (email: string, _password: string, role?: UserRole): Promise<boolean> => {
-    setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    const entry = DEMO_USERS[email];
-    if (entry) {
-      const userData = { ...entry.user };
-      if (role) userData.role = role;
-      userData.lastLogin = new Date();
-      setUser(userData);
+  // On mount, check if there's a stored token and fetch profile
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('sentinelx_token') : null;
+    if (!token) {
       setIsLoading(false);
-      return true;
+      return;
     }
-    setIsLoading(false);
-    return false;
+    authApi.me()
+      .then((data) => {
+        setUser({
+          id: String(data.id),
+          email: data.email,
+          name: data.name,
+          role: data.role as UserRole,
+          createdAt: new Date(data.createdAt),
+          lastLogin: data.lastLogin ? new Date(data.lastLogin) : undefined,
+        });
+      })
+      .catch(() => {
+        clearToken();
+      })
+      .finally(() => setIsLoading(false));
   }, []);
 
-  const register = useCallback(async (name: string, email: string, _password: string): Promise<boolean> => {
+  const login = useCallback(async (email: string, password: string, role?: UserRole): Promise<boolean> => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    const newUser: User = { id: Date.now().toString(), email, name, role: 'user', createdAt: new Date() };
-    setUser(newUser);
-    setIsLoading(false);
-    return true;
+    try {
+      const data = await authApi.login(email, password);
+      setToken(data.accessToken);
+      setUser({
+        id: String(data.user.id),
+        email: data.user.email,
+        name: data.user.name,
+        role: (role || data.user.role) as UserRole,
+        createdAt: new Date(),
+        lastLogin: new Date(),
+      });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const register = useCallback(async (name: string, email: string, password: string): Promise<boolean> => {
+    setIsLoading(true);
+    try {
+      const data = await authApi.register(name, email, password);
+      setToken(data.accessToken);
+      setUser({
+        id: String(data.user.id),
+        email: data.user.email,
+        name: data.user.name,
+        role: data.user.role as UserRole,
+        createdAt: new Date(),
+      });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   const logout = useCallback(() => {
+    clearToken();
     setUser(null);
   }, []);
 

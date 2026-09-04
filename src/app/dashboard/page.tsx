@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import AppShell from '@/components/layout/AppShell';
-import { demoScans } from '@/data/scans';
+import { dashboardApi, scansApi, ApiScan, ApiDashboard } from '@/lib/api';
 import { cn, formatDateTime, getRiskColor } from '@/lib/utils';
-import { Plus, Globe, Upload, FileCode, ArrowRight, TrendingDown, TrendingUp, Minus } from 'lucide-react';
+import { Plus, Globe, Upload, FileCode, ArrowRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 function StatCard({ label, value, color, icon: Icon }: { label: string; value: number; color?: string; icon: React.ElementType }) {
@@ -62,11 +62,16 @@ function getStatusBadge(status: string) {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const completedScans = demoScans.filter((s) => s.status === 'COMPLETED');
-  const safe = completedScans.filter((s) => s.verdict === 'SAFE' || s.verdict === 'LOW_RISK').length;
-  const suspicious = completedScans.filter((s) => s.verdict === 'SUSPICIOUS').length;
-  const highRisk = completedScans.filter((s) => s.verdict === 'HIGH_RISK').length;
-  const critical = completedScans.filter((s) => s.verdict === 'CRITICAL').length;
+  const [dashboard, setDashboard] = useState<ApiDashboard | null>(null);
+  const [scans, setScans] = useState<ApiScan[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([dashboardApi.get(), scansApi.list()])
+      .then(([d, s]) => { setDashboard(d); setScans(s); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -74,6 +79,16 @@ export default function DashboardPage() {
     if (h < 18) return 'Good afternoon';
     return 'Good evening';
   };
+
+  if (loading) {
+    return (
+      <AppShell title="Dashboard">
+        <div className="flex items-center justify-center py-20">
+          <div className="w-6 h-6 border-2 border-[#111827] dark:border-white border-t-transparent rounded-full animate-spin" />
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell title="Dashboard">
@@ -92,11 +107,11 @@ export default function DashboardPage() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          <StatCard label="Total Scans" value={completedScans.length} icon={Globe} />
-          <StatCard label="Safe" value={safe} color="text-green-600 dark:text-green-400" icon={Globe} />
-          <StatCard label="Suspicious" value={suspicious} color="text-orange-600 dark:text-orange-400" icon={Globe} />
-          <StatCard label="High Risk" value={highRisk} color="text-orange-600 dark:text-orange-400" icon={Globe} />
-          <StatCard label="Critical" value={critical} color="text-red-600 dark:text-red-400" icon={Globe} />
+          <StatCard label="Total Scans" value={dashboard?.totalScans ?? 0} icon={Globe} />
+          <StatCard label="Safe" value={dashboard?.safe ?? 0} color="text-green-600 dark:text-green-400" icon={Globe} />
+          <StatCard label="Suspicious" value={dashboard?.suspicious ?? 0} color="text-orange-600 dark:text-orange-400" icon={Globe} />
+          <StatCard label="High Risk" value={dashboard?.highRisk ?? 0} color="text-orange-600 dark:text-orange-400" icon={Globe} />
+          <StatCard label="Critical" value={dashboard?.critical ?? 0} color="text-red-600 dark:text-red-400" icon={Globe} />
         </div>
 
         {/* Recent Scans */}
@@ -108,7 +123,7 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div className="space-y-3">
-            {demoScans.slice(0, 5).map((scan) => {
+            {scans.slice(0, 5).map((scan) => {
               const verdict = getVerdictBadge(scan.verdict);
               const statusBadge = getStatusBadge(scan.status);
               return (
@@ -130,7 +145,7 @@ export default function DashboardPage() {
                           </span>
                         </div>
                         <p className="text-[14px] font-medium text-[#111827] dark:text-white mt-0.5">{scan.target}</p>
-                        <p className="text-[11px] text-[#9ca3af] mt-0.5 capitalize">{scan.type === 'source-code' ? 'Source Code' : scan.type} • {scan.completedAt ? formatDateTime(scan.completedAt) : 'In Progress'}</p>
+                        <p className="text-[11px] text-[#9ca3af] mt-0.5 capitalize">{scan.type === 'source-code' ? 'Source Code' : scan.type} &bull; {scan.completedAt ? formatDateTime(new Date(scan.completedAt)) : 'In Progress'}</p>
                       </div>
                     </div>
                     <div className="text-right">

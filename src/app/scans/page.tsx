@@ -1,20 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import AppShell from '@/components/layout/AppShell';
-import { demoScans } from '@/data/scans';
+import { scansApi, ApiScan } from '@/lib/api';
 import { cn, formatDateTime, getRiskColor } from '@/lib/utils';
-import { Globe, Upload, FileCode, Search, Filter, ArrowUpDown, ChevronDown } from 'lucide-react';
+import { Globe, Upload, FileCode, Search, Filter, ArrowUpDown } from 'lucide-react';
 
 export default function ScansPage() {
+  const [scans, setScans] = useState<ApiScan[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [verdictFilter, setVerdictFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest');
   const [showFilters, setShowFilters] = useState(false);
 
-  let filtered = [...demoScans];
+  useEffect(() => {
+    scansApi.list()
+      .then(setScans)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  let filtered = [...scans];
   if (search) {
     const q = search.toLowerCase();
     filtered = filtered.filter((s) => s.scanId.toLowerCase().includes(q) || s.target.toLowerCase().includes(q));
@@ -30,8 +39,10 @@ export default function ScansPage() {
     });
   }
   filtered.sort((a, b) => {
-    if (sortBy === 'newest') return b.submittedAt.getTime() - a.submittedAt.getTime();
-    if (sortBy === 'oldest') return a.submittedAt.getTime() - b.submittedAt.getTime();
+    const dateA = new Date(a.submittedAt).getTime();
+    const dateB = new Date(b.submittedAt).getTime();
+    if (sortBy === 'newest') return dateB - dateA;
+    if (sortBy === 'oldest') return dateA - dateB;
     if (sortBy === 'highest') return b.riskScore - a.riskScore;
     return a.riskScore - b.riskScore;
   });
@@ -52,6 +63,16 @@ export default function ScansPage() {
       default: return { bg: 'bg-gray-50', text: 'text-gray-700', label: verdict };
     }
   };
+
+  if (loading) {
+    return (
+      <AppShell title="Scan History">
+        <div className="flex items-center justify-center py-20">
+          <div className="w-6 h-6 border-2 border-[#111827] dark:border-white border-t-transparent rounded-full animate-spin" />
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell title="Scan History">
@@ -127,7 +148,7 @@ export default function ScansPage() {
                         {scan.isDemo && <span className="text-[9px] px-1 py-0.5 rounded bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 font-medium">DEMO</span>}
                       </div>
                       <p className="text-[14px] font-medium text-[#111827] dark:text-white mt-0.5">{scan.target}</p>
-                      <p className="text-[11px] text-[#9ca3af] mt-0.5 capitalize">{scan.type === 'source-code' ? 'Source Code' : scan.type} • {scan.completedAt ? formatDateTime(scan.completedAt) : 'In Progress'}</p>
+                      <p className="text-[11px] text-[#9ca3af] mt-0.5 capitalize">{scan.type === 'source-code' ? 'Source Code' : scan.type} &bull; {scan.completedAt ? formatDateTime(new Date(scan.completedAt)) : 'In Progress'}</p>
                     </div>
                   </div>
                   <div className="text-right flex items-center gap-4">

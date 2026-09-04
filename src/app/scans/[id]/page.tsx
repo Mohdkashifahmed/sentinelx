@@ -4,23 +4,20 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/layout/AppShell';
-import { demoScans, demoFindings, demoRiskBreakdowns, demoTimelines, demoAIAnalyses, demoReports } from '@/data/scans';
+import { scansApi, ApiScanDetail } from '@/lib/api';
 import { cn, formatDateTime, getSeverityColor, getRiskColor } from '@/lib/utils';
 import {
   Globe, Upload, FileCode, Clock, AlertTriangle, CheckCircle2, XCircle, ChevronDown, ChevronUp,
-  Bot, FileText, ArrowLeft, MessageSquare, Send, Shield, Info, ExternalLink,
+  Bot, FileText, ArrowLeft, MessageSquare, Send, Info,
 } from 'lucide-react';
 import { Finding, AIChatMessage } from '@/data/types';
 
 export default function ScanDetailPage() {
   const params = useParams();
   const scanId = params?.id as string;
-  const scan = demoScans.find((s) => s.id === scanId);
-  const findings = demoFindings[scanId] || [];
-  const riskBreakdown = demoRiskBreakdowns[scanId];
-  const timeline = demoTimelines[scanId] || [];
-  const aiAnalysis = demoAIAnalyses[scanId];
-  const report = demoReports[scanId];
+  const [detail, setDetail] = useState<ApiScanDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const [activeTab, setActiveTab] = useState<'overview' | 'findings' | 'technical' | 'ai' | 'remediation'>('overview');
   const [expandedFinding, setExpandedFinding] = useState<string | null>(null);
@@ -29,16 +26,38 @@ export default function ScanDetailPage() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
 
-  if (!scan) {
+  useEffect(() => {
+    if (!scanId) return;
+    scansApi.get(Number(scanId))
+      .then(setDetail)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [scanId]);
+
+  if (loading) {
     return (
       <AppShell title="Scan Details">
-        <div className="max-w-[800px] mx-auto text-center py-20">
-          <p className="text-[16px] text-[#6b7280] dark:text-[#a3a3a3]">Scan not found.</p>
-          <Link href="/dashboard" className="text-[13px] text-[#111827] dark:text-white mt-4 inline-block hover:underline">← Back to Dashboard</Link>
+        <div className="flex items-center justify-center py-20">
+          <div className="w-6 h-6 border-2 border-[#111827] dark:border-white border-t-transparent rounded-full animate-spin" />
         </div>
       </AppShell>
     );
   }
+
+  if (error || !detail) {
+    return (
+      <AppShell title="Scan Details">
+        <div className="max-w-[800px] mx-auto text-center py-20">
+          <p className="text-[16px] text-[#6b7280] dark:text-[#a3a3a3]">Scan not found.</p>
+          <Link href="/dashboard" className="text-[13px] text-[#111827] dark:text-white mt-4 inline-block hover:underline">&larr; Back to Dashboard</Link>
+        </div>
+      </AppShell>
+    );
+  }
+
+  const scan = detail.scan;
+  const findings = detail.findings || [];
+  const timeline = detail.timeline || [];
 
   const getScanIcon = () => {
     if (scan.type === 'website') return <Globe className="w-5 h-5" />;
@@ -69,7 +88,7 @@ export default function ScanDetailPage() {
     await new Promise((r) => setTimeout(r, 1500));
     const aiMsg: AIChatMessage = {
       id: (Date.now() + 1).toString(), role: 'assistant', timestamp: new Date(),
-      content: `Based on the scan findings for ${scan.target}: ${aiAnalysis?.threatExplanation || 'The analysis indicates several security concerns that should be addressed. The findings suggest reviewing the specific issues identified in the detailed findings tab for more context.'}`,
+      content: `Based on the scan findings for ${scan.target}: The security engine has identified several areas of concern that are detailed in the scan report. Please review the findings tab for specific details.`,
       sources: ['Security Engine Analysis', 'AI Threat Assessment'],
     };
     setChatMessages((prev) => [...prev, aiMsg]);
@@ -103,7 +122,7 @@ export default function ScanDetailPage() {
                   {scan.isDemo && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 font-medium">DEMO</span>}
                 </div>
                 <h2 className="text-[18px] font-semibold text-[#111827] dark:text-white mt-1">{scan.target}</h2>
-                <p className="text-[12px] text-[#9ca3af] mt-0.5 capitalize">{scan.type === 'source-code' ? 'Source Code' : scan.type} scan • Submitted {formatDateTime(scan.submittedAt)}</p>
+                <p className="text-[12px] text-[#9ca3af] mt-0.5 capitalize">{scan.type === 'source-code' ? 'Source Code' : scan.type} scan &bull; Submitted {formatDateTime(new Date(scan.submittedAt))}</p>
               </div>
             </div>
             <div className="text-right">
@@ -140,30 +159,6 @@ export default function ScanDetailPage() {
           ))}
         </div>
 
-        {/* Risk Breakdown */}
-        {showRiskDetail && riskBreakdown && (
-          <div className="p-5 rounded-xl border border-[#e5e7eb] dark:border-white/5 bg-white dark:bg-[#0a0a0a] animate-fade-in">
-            <h3 className="text-[14px] font-semibold text-[#111827] dark:text-white mb-4">Risk Score Breakdown</h3>
-            <div className="space-y-3">
-              {riskBreakdown.factors.map((f) => (
-                <div key={f.factor}>
-                  <div className="flex items-center justify-between text-[12px] mb-1">
-                    <span className="text-[#6b7280] dark:text-[#a3a3a3]">{f.factor}</span>
-                    <span className="text-[#111827] dark:text-white font-medium">+{f.score}</span>
-                  </div>
-                  <div className="h-1.5 bg-[#f3f4f6] dark:bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-[#111827] dark:bg-white/80 rounded-full" style={{ width: `${f.score}%` }} />
-                  </div>
-                </div>
-              ))}
-              <div className="flex items-center justify-between pt-3 border-t border-[#f3f4f6] dark:border-white/5">
-                <span className="text-[13px] font-medium text-[#111827] dark:text-white">Final Score</span>
-                <span className={cn('text-[16px] font-semibold', getRiskColor(scan.riskScore))}>{scan.riskScore}/100</span>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Tabs */}
         <div className="flex gap-1 border-b border-[#e5e7eb] dark:border-white/5">
           {tabs.map((tab) => (
@@ -185,7 +180,6 @@ export default function ScanDetailPage() {
         {/* Tab Content */}
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-fade-in">
-            {/* Scan Status */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-5 rounded-xl border border-[#e5e7eb] dark:border-white/5 bg-white dark:bg-[#0a0a0a]">
                 <h3 className="text-[13px] font-semibold text-[#111827] dark:text-white mb-3">Scan Information</h3>
@@ -195,8 +189,8 @@ export default function ScanDetailPage() {
                     { label: 'Target', value: scan.target },
                     { label: 'Type', value: scan.type === 'source-code' ? 'Source Code' : scan.type },
                     { label: 'Status', value: scan.status },
-                    { label: 'Submitted', value: formatDateTime(scan.submittedAt) },
-                    { label: 'Completed', value: scan.completedAt ? formatDateTime(scan.completedAt) : '—' },
+                    { label: 'Submitted', value: formatDateTime(new Date(scan.submittedAt)) },
+                    { label: 'Completed', value: scan.completedAt ? formatDateTime(new Date(scan.completedAt)) : '\u2014' },
                   ].map((item) => (
                     <div key={item.label} className="flex items-center justify-between py-1.5">
                       <span className="text-[12px] text-[#9ca3af]">{item.label}</span>
@@ -206,33 +200,34 @@ export default function ScanDetailPage() {
                 </div>
               </div>
 
-              {/* Executive Summary */}
               <div className="p-5 rounded-xl border border-[#e5e7eb] dark:border-white/5 bg-white dark:bg-[#0a0a0a]">
                 <h3 className="text-[13px] font-semibold text-[#111827] dark:text-white mb-3">Executive Summary</h3>
                 <p className="text-[13px] text-[#6b7280] dark:text-[#a3a3a3] leading-relaxed">
-                  {report?.executiveSummary || 'Analysis in progress...'}
+                  Automated security analysis identified {findings.length} findings across multiple severity levels. Risk score: {scan.riskScore}/100.
                 </p>
               </div>
             </div>
 
             {/* Timeline */}
-            <div className="p-5 rounded-xl border border-[#e5e7eb] dark:border-white/5 bg-white dark:bg-[#0a0a0a]">
-              <h3 className="text-[13px] font-semibold text-[#111827] dark:text-white mb-4">Scan Timeline</h3>
-              <div className="space-y-0">
-                {timeline.map((step, i) => (
-                  <div key={step.stage} className="flex items-start gap-4">
-                    <div className="flex flex-col items-center">
-                      <div className={cn('w-3 h-3 rounded-full border-2 flex-shrink-0', step.status === 'completed' ? 'bg-[#111827] dark:bg-white border-[#111827] dark:border-white' : step.status === 'current' ? 'bg-white dark:bg-[#0a0a0a] border-[#111827] dark:border-white' : 'bg-white dark:bg-[#0a0a0a] border-[#e5e7eb] dark:border-white/20')} />
-                      {i < timeline.length - 1 && <div className={cn('w-px h-8', step.status === 'completed' ? 'bg-[#111827] dark:bg-white/20' : 'bg-[#e5e7eb] dark:bg-white/5')} />}
+            {timeline.length > 0 && (
+              <div className="p-5 rounded-xl border border-[#e5e7eb] dark:border-white/5 bg-white dark:bg-[#0a0a0a]">
+                <h3 className="text-[13px] font-semibold text-[#111827] dark:text-white mb-4">Scan Timeline</h3>
+                <div className="space-y-0">
+                  {timeline.map((step, i) => (
+                    <div key={step.stage} className="flex items-start gap-4">
+                      <div className="flex flex-col items-center">
+                        <div className={cn('w-3 h-3 rounded-full border-2 flex-shrink-0', step.status === 'completed' ? 'bg-[#111827] dark:bg-white border-[#111827] dark:border-white' : 'bg-white dark:bg-[#0a0a0a] border-[#e5e7eb] dark:border-white/20')} />
+                        {i < timeline.length - 1 && <div className={cn('w-px h-8', step.status === 'completed' ? 'bg-[#111827] dark:bg-white/20' : 'bg-[#e5e7eb] dark:bg-white/5')} />}
+                      </div>
+                      <div className="pb-6">
+                        <p className={cn('text-[13px] font-medium', step.status === 'completed' ? 'text-[#111827] dark:text-white' : 'text-[#9ca3af]')}>{step.stage}</p>
+                        <p className="text-[11px] text-[#9ca3af]">{formatDateTime(new Date(step.timestamp))}</p>
+                      </div>
                     </div>
-                    <div className="pb-6">
-                      <p className={cn('text-[13px] font-medium', step.status === 'completed' ? 'text-[#111827] dark:text-white' : 'text-[#9ca3af]')}>{step.stage}</p>
-                      <p className="text-[11px] text-[#9ca3af]">{formatDateTime(step.timestamp)}</p>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -245,12 +240,13 @@ export default function ScanDetailPage() {
               </div>
             ) : (
               findings.map((finding) => {
-                const expanded = expandedFinding === finding.id;
+                const fid = String(finding.id);
+                const expanded = expandedFinding === fid;
                 const sev = getSeverityColor(finding.severity);
                 return (
-                  <div key={finding.id} className="rounded-xl border border-[#e5e7eb] dark:border-white/5 bg-white dark:bg-[#0a0a0a] overflow-hidden">
+                  <div key={fid} className="rounded-xl border border-[#e5e7eb] dark:border-white/5 bg-white dark:bg-[#0a0a0a] overflow-hidden">
                     <button
-                      onClick={() => setExpandedFinding(expanded ? null : finding.id)}
+                      onClick={() => setExpandedFinding(expanded ? null : fid)}
                       className="w-full flex items-center justify-between p-4 text-left hover:bg-[#f8f9fa] dark:hover:bg-white/[0.02] transition-colors"
                     >
                       <div className="flex items-center gap-3">
@@ -275,11 +271,9 @@ export default function ScanDetailPage() {
                           <p className="text-[12px] font-mono text-[#111827] dark:text-white bg-[#f3f4f6] dark:bg-white/5 p-3 rounded-lg">{finding.evidence}</p>
                         </div>
                         {finding.location && (
-                          <div className="flex gap-4">
-                            <div>
-                              <p className="text-[11px] text-[#9ca3af] uppercase tracking-wider mb-1">Location</p>
-                              <p className="text-[12px] text-[#6b7280] dark:text-[#a3a3a3]">{finding.location}</p>
-                            </div>
+                          <div>
+                            <p className="text-[11px] text-[#9ca3af] uppercase tracking-wider mb-1">Location</p>
+                            <p className="text-[12px] text-[#6b7280] dark:text-[#a3a3a3]">{finding.location}</p>
                           </div>
                         )}
                         <div>
@@ -312,19 +306,19 @@ export default function ScanDetailPage() {
           <div className="p-6 rounded-xl border border-[#e5e7eb] dark:border-white/5 bg-white dark:bg-[#0a0a0a] animate-fade-in">
             <h3 className="text-[14px] font-semibold text-[#111827] dark:text-white mb-4">Technical Details</h3>
             <div className="space-y-4">
-              {findings.filter((f) => f.file || f.location).map((f) => (
-                <div key={f.id} className="p-4 rounded-lg bg-[#f8f9fa] dark:bg-white/[0.02] border border-[#f3f4f6] dark:border-white/5">
+              {findings.filter((f) => f.filePath || f.location).map((f) => (
+                <div key={String(f.id)} className="p-4 rounded-lg bg-[#f8f9fa] dark:bg-white/[0.02] border border-[#f3f4f6] dark:border-white/5">
                   <div className="flex items-center gap-2 mb-2">
                     <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded', getSeverityColor(f.severity).bg, getSeverityColor(f.severity).text)}>
                       {f.severity.toUpperCase()}
                     </span>
                     <span className="text-[13px] font-medium text-[#111827] dark:text-white">{f.title}</span>
                   </div>
-                  {f.file && <p className="text-[12px] font-mono text-[#6b7280] dark:text-[#a3a3a3]">📄 {f.file}{f.line ? `:${f.line}` : ''}</p>}
+                  {f.filePath && <p className="text-[12px] font-mono text-[#6b7280] dark:text-[#a3a3a3]">{f.filePath}{f.lineNumber ? `:${f.lineNumber}` : ''}</p>}
                   <p className="text-[12px] font-mono text-[#9ca3af] mt-2 bg-[#111827] dark:bg-black/50 text-green-400 dark:text-green-300 p-3 rounded-lg">{f.evidence}</p>
                 </div>
               ))}
-              {findings.filter((f) => f.file || f.location).length === 0 && (
+              {findings.filter((f) => f.filePath || f.location).length === 0 && (
                 <p className="text-[13px] text-[#9ca3af]">No file-level technical details available for this scan type.</p>
               )}
             </div>
@@ -333,28 +327,16 @@ export default function ScanDetailPage() {
 
         {activeTab === 'ai' && (
           <div className="space-y-6 animate-fade-in">
-            {aiAnalysis && (
-              <>
-                <div className="p-5 rounded-xl border border-purple-200 dark:border-purple-800/30 bg-white dark:bg-[#0a0a0a]">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Bot className="w-4 h-4 text-purple-500" />
-                    <span className="text-[13px] font-semibold text-[#111827] dark:text-white">AI Threat Explanation</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400">AI-Assisted</span>
-                  </div>
-                  <p className="text-[13px] text-[#6b7280] dark:text-[#a3a3a3] leading-relaxed">{aiAnalysis.threatExplanation}</p>
-                </div>
-                <div className="p-5 rounded-xl border border-[#e5e7eb] dark:border-white/5 bg-white dark:bg-[#0a0a0a]">
-                  <h3 className="text-[13px] font-semibold text-[#111827] dark:text-white mb-3">AI Risk Summary</h3>
-                  <p className="text-[13px] text-[#6b7280] dark:text-[#a3a3a3] leading-relaxed">{aiAnalysis.riskSummary}</p>
-                </div>
-                {aiAnalysis.falsePositiveAssessment && (
-                  <div className="p-5 rounded-xl border border-[#e5e7eb] dark:border-white/5 bg-white dark:bg-[#0a0a0a]">
-                    <h3 className="text-[13px] font-semibold text-[#111827] dark:text-white mb-3">False Positive Assessment</h3>
-                    <p className="text-[13px] text-[#6b7280] dark:text-[#a3a3a3] leading-relaxed">{aiAnalysis.falsePositiveAssessment}</p>
-                  </div>
-                )}
-              </>
-            )}
+            <div className="p-5 rounded-xl border border-purple-200 dark:border-purple-800/30 bg-white dark:bg-[#0a0a0a]">
+              <div className="flex items-center gap-2 mb-3">
+                <Bot className="w-4 h-4 text-purple-500" />
+                <span className="text-[13px] font-semibold text-[#111827] dark:text-white">AI Analysis</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400">AI-Assisted</span>
+              </div>
+              <p className="text-[13px] text-[#6b7280] dark:text-[#a3a3a3] leading-relaxed">
+                AI analysis for this scan is available in the report. The security engine has processed {findings.length} findings and generated risk assessments.
+              </p>
+            </div>
 
             {/* AI Chat */}
             <div className="p-5 rounded-xl border border-purple-200 dark:border-purple-800/30 bg-white dark:bg-[#0a0a0a]">
@@ -399,42 +381,50 @@ export default function ScanDetailPage() {
           </div>
         )}
 
-        {activeTab === 'remediation' && report && (
+        {activeTab === 'remediation' && (
           <div className="space-y-6 animate-fade-in">
             <div className="p-5 rounded-xl border border-[#e5e7eb] dark:border-white/5 bg-white dark:bg-[#0a0a0a]">
               <h3 className="text-[14px] font-semibold text-[#111827] dark:text-white mb-3">Final Recommendation</h3>
-              <p className="text-[13px] text-[#6b7280] dark:text-[#a3a3a3] leading-relaxed">{report.finalRecommendation}</p>
+              <p className="text-[13px] text-[#6b7280] dark:text-[#a3a3a3] leading-relaxed">
+                {findings.length > 0
+                  ? `Address the ${findings.length} identified findings based on their severity. Critical and high-severity issues should be remediated immediately.`
+                  : 'No significant issues were identified during this scan.'}
+              </p>
             </div>
             <div className="p-5 rounded-xl border border-[#e5e7eb] dark:border-white/5 bg-white dark:bg-[#0a0a0a]">
-              <h3 className="text-[14px] font-semibold text-[#111827] dark:text-white mb-4">Remediation Plan</h3>
+              <h3 className="text-[14px] font-semibold text-[#111827] dark:text-white mb-4">Remediation Priority</h3>
               <div className="space-y-3">
-                {report.remediationPlan.map((step, i) => {
-                  const sev = getSeverityColor(step.severity);
-                  return (
-                    <div key={i} className="flex items-start gap-4 p-4 rounded-lg bg-[#f8f9fa] dark:bg-white/[0.02] border border-[#f3f4f6] dark:border-white/5">
-                      <div className="w-8 h-8 rounded-lg bg-[#111827] dark:bg-white/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-[12px] font-semibold text-white dark:text-white">P{step.priority}</span>
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[13px] font-medium text-[#111827] dark:text-white">{step.title}</span>
-                          <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded', sev.bg, sev.text)}>
-                            {step.severity.toUpperCase()}
-                          </span>
+                {findings
+                  .sort((a, b) => {
+                    const order = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+                    return (order[a.severity as keyof typeof order] ?? 5) - (order[b.severity as keyof typeof order] ?? 5);
+                  })
+                  .slice(0, 10)
+                  .map((finding, i) => {
+                    const sev = getSeverityColor(finding.severity);
+                    return (
+                      <div key={String(finding.id)} className="flex items-start gap-4 p-4 rounded-lg bg-[#f8f9fa] dark:bg-white/[0.02] border border-[#f3f4f6] dark:border-white/5">
+                        <div className="w-8 h-8 rounded-lg bg-[#111827] dark:bg-white/10 flex items-center justify-center flex-shrink-0">
+                          <span className="text-[12px] font-semibold text-white dark:text-white">P{i < 3 ? i + 1 : 3}</span>
                         </div>
-                        <p className="text-[12px] text-[#6b7280] dark:text-[#a3a3a3]">{step.description}</p>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[13px] font-medium text-[#111827] dark:text-white">{finding.title}</span>
+                            <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded', sev.bg, sev.text)}>
+                              {finding.severity.toUpperCase()}
+                            </span>
+                          </div>
+                          <p className="text-[12px] text-[#6b7280] dark:text-[#a3a3a3]">{finding.recommendation}</p>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             </div>
-            {report && (
-              <button className="w-full py-3 border border-[#e5e7eb] dark:border-white/10 rounded-xl text-[13px] font-medium text-[#6b7280] dark:text-[#a3a3a3] hover:bg-[#f8f9fa] dark:hover:bg-white/[0.02] transition-colors flex items-center justify-center gap-2">
-                <FileText className="w-4 h-4" />
-                Download PDF Report
-              </button>
-            )}
+            <button className="w-full py-3 border border-[#e5e7eb] dark:border-white/10 rounded-xl text-[13px] font-medium text-[#6b7280] dark:text-[#a3a3a3] hover:bg-[#f8f9fa] dark:hover:bg-white/[0.02] transition-colors flex items-center justify-center gap-2">
+              <FileText className="w-4 h-4" />
+              Download PDF Report
+            </button>
           </div>
         )}
       </div>

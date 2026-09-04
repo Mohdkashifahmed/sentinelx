@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AppShell from '@/components/layout/AppShell';
-import { demoNotifications } from '@/data/notifications';
+import { notificationsApi, ApiNotification } from '@/lib/api';
 import { cn, formatDateTime } from '@/lib/utils';
 import { Bell, CheckCircle2, AlertTriangle, FileText, MessageSquare, Settings, X } from 'lucide-react';
 
@@ -25,19 +25,41 @@ const typeColors: Record<string, string> = {
 };
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState(demoNotifications);
+  const [notifications, setNotifications] = useState<ApiNotification[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+
+  useEffect(() => {
+    notificationsApi.list()
+      .then(setNotifications)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered = filter === 'unread' ? notifications.filter((n) => !n.read) : notifications;
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    notificationsApi.markAllRead().then(() => {
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    });
   };
 
-  const dismiss = (id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  const dismiss = (id: number) => {
+    notificationsApi.markRead(id).then(() => {
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    });
   };
+
+  if (loading) {
+    return (
+      <AppShell title="Notifications">
+        <div className="flex items-center justify-center py-20">
+          <div className="w-6 h-6 border-2 border-[#111827] dark:border-white border-t-transparent rounded-full animate-spin" />
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell title="Notifications">
@@ -75,7 +97,7 @@ export default function NotificationsPage() {
                     {!n.read && <div className="w-2 h-2 rounded-full bg-blue-500" />}
                   </div>
                   <p className="text-[12px] text-[#6b7280] dark:text-[#a3a3a3] mt-0.5">{n.message}</p>
-                  <p className="text-[11px] text-[#9ca3af] mt-1">{formatDateTime(n.createdAt)}</p>
+                  <p className="text-[11px] text-[#9ca3af] mt-1">{formatDateTime(new Date(n.createdAt))}</p>
                 </div>
                 <button onClick={() => dismiss(n.id)} className="p-1 rounded hover:bg-[#f3f4f6] dark:hover:bg-white/5 text-[#9ca3af]">
                   <X className="w-4 h-4" />
