@@ -3,7 +3,7 @@
  * Wraps fetch with auth token handling and response mapping.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = 'https://sentinelx-backend.onrender.com';
 
 // --- Token management ---
 function getToken(): string | null {
