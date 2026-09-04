@@ -8,7 +8,7 @@ import { Globe, Upload, FileCode, ArrowRight, Shield, AlertTriangle, Lock, Check
 
 type ScanOption = 'website' | 'file' | 'source-code' | null;
 
-const API_BASE = 'https://sentinelx-backend.onrender.com';
+const API_BASE = 'https://sentinelx-backend-jucx.onrender.com';
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;

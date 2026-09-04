@@ -3,7 +3,7 @@
  * Wraps fetch with auth token handling and response mapping.
  */
 
-const API_BASE = 'https://sentinelx-backend.onrender.com';
+const API_BASE = 'https://sentinelx-backend-jucx.onrender.com';
 
 // --- Token management ---
 function getToken(): string | null {
